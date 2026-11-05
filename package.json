@@ -1,0 +1,16 @@
+{
+  "name": "sumo-duell",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Zwei Sumoringer kämpfen auf einer runden Plattform, zu zweit an einer Tastatur.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  }
+}
