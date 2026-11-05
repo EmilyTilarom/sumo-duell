@@ -16,6 +16,10 @@ npm run dev
 - **Kampagne:** 10 Level gegen 10 verschiedene KI-Sumos. Ein Sieg schaltet das nächste Level frei, der Fortschritt bleibt im Browser gespeichert.
 - **Zwei Spieler:** beide an einer Tastatur.
 
+## Skins
+
+Siege bringen Münzen, schwerere Level mehr und der erste Sieg über ein Level doppelt so viele. Im Menü **Skins** kauft und wählt jeder Spieler sein Aussehen: Früchte, Countryballs und Krypto-Münzen. Zwei besondere Skins gibt es nur über die Kampagne. Das Standard-Aussehen bleibt erhalten. Die Skins verändern nur das Aussehen, nicht die Spielwerte. Die Münzen sind reine Spielwährung, ohne echtes Geld.
+
 ## Steuerung
 
 | | Bewegen | Stoß | Stemmen | Ausweichen |
@@ -61,5 +65,6 @@ src/
     rules.js     Ring-out, Runden, Match, Schrumpfen
     ai.js        KI-Gegner
     campaign.js  Level und Fortschritt
+    skins.js     Skins, Münzen und Kaufen
 tests/           Tests und Kampfsimulation
 ```

@@ -1,4 +1,6 @@
 import { LEVELS, isUnlocked } from "./game/campaign.js";
+import { COLLECTIONS, SKINS, canBuy, isOwned } from "./game/skins.js";
+import { drawSkinPreview } from "./render.js";
 
 const overlay = document.getElementById("overlay");
 const help = document.getElementById("help");
@@ -14,7 +16,7 @@ function show(html, actions) {
   for (const button of overlay.querySelectorAll("button[data-action]")) {
     button.addEventListener("click", () => actions[button.dataset.action](button.dataset.value));
   }
-  overlay.querySelector("button:enabled")?.focus();
+  (overlay.querySelector('.tabs [aria-pressed="true"]') ?? overlay.querySelector("button:enabled"))?.focus();
 }
 
 function buttons(entries) {
@@ -31,13 +33,14 @@ export function setHelp(mode) {
   help.innerHTML = mode === "versus" ? TWO_PLAYER_HELP : mode === "campaign" ? ONE_PLAYER_HELP : "";
 }
 
-export function showMenu({ muted, onCampaign, onVersus, onSound }) {
+export function showMenu({ muted, coins, onCampaign, onVersus, onSkins, onSound }) {
   const sound = muted ? "Sound: aus" : "Sound: an";
   show(
     `<h1>sumoDuell</h1>
      <p>Stoß den anderen von der Plattform. Wer Schwung hat, ist stark, kommt aber schwer zum Stehen.</p>
-     ${buttons([["campaign", "Kampagne"], ["versus", "Zwei Spieler"], ["sound", sound]])}`,
-    { campaign: onCampaign, versus: onVersus, sound: onSound },
+     ${buttons([["campaign", "Kampagne"], ["versus", "Zwei Spieler"], ["skins", "Skins"], ["sound", sound]])}
+     <p>Münzen: ${coins}</p>`,
+    { campaign: onCampaign, versus: onVersus, skins: onSkins, sound: onSound },
   );
 }
 
@@ -59,6 +62,39 @@ export function showCampaign({ progress, onLevel, onBack }) {
      ${buttons([["back", "Zurück"]])}`,
     { level: (value) => onLevel(Number(value)), back: onBack },
   );
+}
+
+function tab(action, value, label, active) {
+  return `<button data-action="${action}" data-value="${value}" aria-pressed="${active}">${label}</button>`;
+}
+
+function skinCard(skin, { shop, progress, player }) {
+  const owned = isOwned(shop, progress, skin.id);
+  const worn = shop.equipped[player] === skin.id;
+  const open = owned || canBuy(shop, progress, skin.id);
+  const cost = skin.unlockLevel ? `Level ${skin.unlockLevel} schlagen` : `${skin.price} Münzen`;
+  return `<button data-action="pick" data-value="${skin.id}" aria-pressed="${worn}" ${open ? "" : "disabled"}>
+    <canvas data-skin="${skin.id}" width="96" height="96"></canvas>
+    <span>${skin.name}</span>
+    <small>${worn ? "Angelegt" : owned ? "Anlegen" : cost}</small>
+  </button>`;
+}
+
+export function showSkins(view) {
+  const { shop, player, collection, onPlayer, onCollection, onPick, onBack } = view;
+  const skins = SKINS.filter((skin) => skin.collection === collection);
+  show(
+    `<h2>Skins</h2>
+     <p>Münzen: ${shop.coins}</p>
+     <div class="tabs">${[0, 1].map((p) => tab("player", p, `Spieler ${p + 1}`, p === player)).join("")}</div>
+     <div class="tabs">${COLLECTIONS.map((c) => tab("collection", c.id, c.name, c.id === collection)).join("")}</div>
+     <div class="levels">${skins.map((skin) => skinCard(skin, view)).join("")}</div>
+     ${buttons([["back", "Zurück"]])}`,
+    { player: (value) => onPlayer(Number(value)), collection: onCollection, pick: onPick, back: onBack },
+  );
+  for (const canvas of overlay.querySelectorAll("canvas[data-skin]")) {
+    drawSkinPreview(canvas, SKINS.find((skin) => skin.id === canvas.dataset.skin).look);
+  }
 }
 
 export function showDialog(title, text, entries) {

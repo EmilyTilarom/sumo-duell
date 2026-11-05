@@ -1,17 +1,27 @@
 import { createAudio } from "./audio.js";
 import { createAi, thinkAi } from "./game/ai.js";
 import { LEVELS, loadProgress, recordWin, saveProgress } from "./game/campaign.js";
+import {
+  LOSS_REWARD,
+  VERSUS_REWARD,
+  addCoins,
+  buySkin,
+  equipSkin,
+  equippedLook,
+  isOwned,
+  loadShop,
+  saveShop,
+  winReward,
+} from "./game/skins.js";
 import { STEPS_PER_SECOND, createWorld, stepWorld } from "./game/world.js";
 import { createKeyboard } from "./input.js";
 import { createRenderer } from "./render.js";
-import { hideOverlay, setHelp, showCampaign, showDialog, showMenu } from "./ui.js";
+import { hideOverlay, setHelp, showCampaign, showDialog, showMenu, showSkins } from "./ui.js";
 
 const STEP_MS = 1000 / STEPS_PER_SECOND;
 // Nach einem Tab-Wechsel nicht alle verpassten Schritte nachholen.
 const MAX_FRAME_MS = 250;
 const MUTE_KEY = "sumoDuell.muted";
-const PLAYER_ONE = { body: "#e4483c", belt: "#fff0d0", hair: "bun" };
-const PLAYER_TWO = { body: "#3f86e8", belt: "#ffe08a", hair: "band" };
 
 const storage = window.localStorage;
 const renderer = createRenderer(document.getElementById("game"));
@@ -20,6 +30,8 @@ const audio = createAudio();
 audio.muted = storage.getItem(MUTE_KEY) === "1";
 
 let progress = loadProgress(storage);
+let shop = loadShop(storage);
+const skinView = { player: 0, collection: "fruit" };
 let session = null;
 let paused = false;
 let lastTime = performance.now();
@@ -31,6 +43,7 @@ function openMenu() {
   setHelp(null);
   showMenu({
     muted: audio.muted,
+    coins: shop.coins,
     onCampaign: () => {
       audio.unlock();
       openCampaign();
@@ -39,6 +52,7 @@ function openMenu() {
       audio.unlock();
       startVersus();
     },
+    onSkins: openSkins,
     onSound: () => {
       audio.muted = !audio.muted;
       storage.setItem(MUTE_KEY, audio.muted ? "1" : "0");
@@ -54,6 +68,38 @@ function openCampaign() {
   showCampaign({ progress, onLevel: startLevel, onBack: openMenu });
 }
 
+function updateShop(next) {
+  shop = next;
+  saveShop(storage, shop);
+}
+
+function reward(amount) {
+  updateShop(addCoins(shop, amount));
+  return `+${amount} Münzen`;
+}
+
+function openSkins() {
+  showSkins({
+    shop,
+    progress,
+    ...skinView,
+    onPlayer: (player) => {
+      skinView.player = player;
+      openSkins();
+    },
+    onCollection: (collection) => {
+      skinView.collection = collection;
+      openSkins();
+    },
+    onPick: (id) => {
+      const paid = isOwned(shop, progress, id) ? shop : buySkin(shop, progress, id);
+      updateShop(equipSkin(paid, progress, skinView.player, id));
+      openSkins();
+    },
+    onBack: openMenu,
+  });
+}
+
 function beginSession(next) {
   session = next;
   paused = false;
@@ -67,7 +113,7 @@ function startVersus() {
   beginSession({
     mode: "versus",
     world: createWorld(),
-    labels: { names: ["Spieler 1", "Spieler 2"], looks: [PLAYER_ONE, PLAYER_TWO] },
+    labels: { names: ["Spieler 1", "Spieler 2"], looks: [equippedLook(shop, progress, 0), equippedLook(shop, progress, 1)] },
     controllers: [() => keyboard.read(0), () => keyboard.read(1)],
   });
 }
@@ -79,7 +125,7 @@ function startLevel(level) {
     mode: "campaign",
     level,
     world: createWorld({ masses: [1, entry.mass] }),
-    labels: { names: ["Du", entry.name], looks: [PLAYER_ONE, entry] },
+    labels: { names: ["Du", entry.name], looks: [equippedLook(shop, progress, 0), entry] },
     controllers: [() => keyboard.read(0), (world) => thinkAi(ai, world, 1)],
   });
 }
@@ -91,7 +137,7 @@ function finishMatch() {
   const score = `${world.scores[0]} : ${world.scores[1]}`;
 
   if (mode === "versus") {
-    showDialog(`${labels.names[winner]} gewinnt`, `Endstand ${score}`, [
+    showDialog(`${labels.names[winner]} gewinnt`, `Endstand ${score} · ${reward(VERSUS_REWARD)}`, [
       ["again", "Noch ein Match", startVersus],
       ["menu", "Hauptmenü", openMenu],
     ]);
@@ -99,23 +145,24 @@ function finishMatch() {
   }
 
   if (winner !== 0) {
-    showDialog("Verloren", `${labels.names[1]} bleibt stehen. Endstand ${score}`, [
+    showDialog("Verloren", `${labels.names[1]} bleibt stehen. Endstand ${score} · ${reward(LOSS_REWARD)}`, [
       ["again", "Nochmal", () => startLevel(level)],
       ["list", "Levelauswahl", openCampaign],
     ]);
     return;
   }
 
+  const coins = reward(winReward(level, level > progress.beaten));
   progress = recordWin(progress, level);
   saveProgress(storage, progress);
   if (level === LEVELS.length) {
-    showDialog("Kampagne geschafft", `${labels.names[1]} ist besiegt. Alle zehn Level sind geschafft!`, [
+    showDialog("Kampagne geschafft", `${labels.names[1]} ist besiegt. Alle zehn Level sind geschafft! ${coins}`, [
       ["list", "Levelauswahl", openCampaign],
       ["menu", "Hauptmenü", openMenu],
     ]);
     return;
   }
-  showDialog("Gewonnen", `${labels.names[1]} ist besiegt. Level ${level + 1} ist frei.`, [
+  showDialog("Gewonnen", `${labels.names[1]} ist besiegt. Level ${level + 1} ist frei. ${coins}`, [
     ["next", "Nächstes Level", () => startLevel(level + 1)],
     ["list", "Levelauswahl", openCampaign],
   ]);

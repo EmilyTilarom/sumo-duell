@@ -166,7 +166,7 @@ function drawHair(ctx, kind, r, away, color) {
     ellipse(ctx, 0, -r * 1.05, r * 0.3, r * 0.24);
     ctx.fill();
     ctx.stroke();
-  } else if (kind === "spikes") {
+  } else if (kind === "spikes" || kind === "crown") {
     for (const angle of [-0.6, -0.2, 0.2, 0.6]) {
       ctx.save();
       ctx.rotate(angle);
@@ -185,7 +185,93 @@ function drawHair(ctx, kind, r, away, color) {
     ctx.beginPath();
     ctx.arc(0, 0, r * 0.88, away ? 1.2 * Math.PI : 1.13 * Math.PI, away ? 1.8 * Math.PI : 1.87 * Math.PI);
     ctx.stroke();
+  } else if (kind === "stem" || kind === "leaf") {
+    ctx.lineWidth = r * 0.13;
+    ctx.strokeStyle = "#5a3a1e";
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.92);
+    ctx.lineTo(r * 0.07, -r * 1.22);
+    ctx.stroke();
+    if (kind === "leaf") {
+      ctx.fillStyle = "#3f9e4a";
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(r * 0.34, -r * 1.14, r * 0.28, r * 0.13, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
   }
+}
+
+// Feste Punkte, damit Muster beim Zeichnen nicht flackern.
+const SPOTS = [[-0.7, -0.5], [-0.3, -0.75], [0.25, -0.7], [0.7, -0.45], [-0.85, 0], [-0.5, 0.15], [0, -0.1], [0.5, 0.1], [0.85, 0.05], [-0.65, 0.55], [-0.2, 0.5], [0.25, 0.6], [0.65, 0.55], [0, 0.85]];
+
+function drawPattern(ctx, pattern, r) {
+  if (pattern === "stripes") {
+    ctx.strokeStyle = "#1f6b35";
+    ctx.lineWidth = r * 0.14;
+    for (const bend of [-0.9, -0.45, 0, 0.45, 0.9]) {
+      ctx.beginPath();
+      ctx.moveTo(bend * r * 0.5, -r);
+      ctx.quadraticCurveTo(bend * r * 1.5, 0, bend * r * 0.5, r);
+      ctx.stroke();
+    }
+  } else if (pattern === "grid") {
+    ctx.strokeStyle = "rgba(150,90,20,0.75)";
+    ctx.lineWidth = 3;
+    for (let offset = -2; offset <= 2; offset += 0.5) {
+      ctx.beginPath();
+      ctx.moveTo(offset * r - r, -r);
+      ctx.lineTo(offset * r + r, r);
+      ctx.moveTo(offset * r + r, -r);
+      ctx.lineTo(offset * r - r, r);
+      ctx.stroke();
+    }
+  } else {
+    const style = { pores: ["rgba(120,70,0,0.35)", 0.035], fuzz: ["rgba(40,22,10,0.5)", 0.05], seeds: ["#2a1a2e", 0.05] }[pattern];
+    ctx.fillStyle = style[0];
+    for (const [x, y] of SPOTS) {
+      ellipse(ctx, x * r, y * r, r * style[1], r * style[1]);
+      ctx.fill();
+    }
+  }
+}
+
+function drawFlag(ctx, flag, r) {
+  if (flag.emblem) {
+    ctx.fillStyle = flag.base;
+    ctx.fillRect(-r, -r, r * 2, r * 2);
+    ctx.fillStyle = flag.mark;
+    if (flag.emblem === "disc") {
+      ellipse(ctx, 0, r * 0.1, r * 0.48, r * 0.48);
+      ctx.fill();
+    } else {
+      ctx.fillRect(-r * 0.56, -r * 0.1, r * 1.12, r * 0.36);
+      ctx.fillRect(-r * 0.18, -r * 0.48, r * 0.36, r * 1.12);
+    }
+    return;
+  }
+  const band = (r * 2) / flag.colors.length;
+  flag.colors.forEach((color, i) => {
+    ctx.fillStyle = color;
+    if (flag.dir === "h") ctx.fillRect(-r, -r + band * i, r * 2, band + 1);
+    else ctx.fillRect(-r + band * i, -r, band + 1, r * 2);
+  });
+}
+
+function drawCoin(ctx, coin, r) {
+  ctx.strokeStyle = coin.rim;
+  ctx.lineWidth = r * 0.12;
+  ellipse(ctx, 0, 0, r * 0.84, r * 0.82);
+  ctx.stroke();
+  ctx.font = `${r * (coin.text.length > 3 ? 0.3 : 0.36)}px ${FONT}`;
+  ctx.textAlign = "center";
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = INK;
+  ctx.fillStyle = "#fff8e0";
+  ctx.strokeText(coin.text, 0, r * 0.68);
+  ctx.fillText(coin.text, 0, r * 0.68);
 }
 
 function drawFace(ctx, f, r, lookX, lookY) {
@@ -266,14 +352,19 @@ function drawBody(ctx, f, look, r, stepPhase) {
 
   ctx.save();
   ctx.clip();
-  ctx.fillStyle = shade(look.body, 0.28);
+  if (look.flag) drawFlag(ctx, look.flag, r);
+  if (look.pattern) drawPattern(ctx, look.pattern, r);
+  ctx.fillStyle = look.flag ? "rgba(255,255,255,0.2)" : shade(look.body, 0.28);
   ellipse(ctx, lookX * r * 0.25 - r * 0.15, -r * 0.3, r * 0.55, r * 0.42);
   ctx.fill();
-  ctx.fillStyle = look.belt;
-  ctx.fillRect(-r, r * 0.34, r * 2, r * 0.34);
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 3;
-  ctx.strokeRect(-r - 2, r * 0.34, r * 2 + 4, r * 0.34);
+  if (look.belt) {
+    ctx.fillStyle = look.belt;
+    ctx.fillRect(-r, r * 0.34, r * 2, r * 0.34);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(-r - 2, r * 0.34, r * 2 + 4, r * 0.34);
+  }
+  if (look.coin) drawCoin(ctx, look.coin, r);
   ctx.restore();
 
   ctx.strokeStyle = INK;
@@ -281,7 +372,7 @@ function drawBody(ctx, f, look, r, stepPhase) {
   ellipse(ctx, 0, 0, r, r * 0.98);
   ctx.stroke();
 
-  drawHair(ctx, look.hair, r, away, look.hair === "bun" ? INK : look.belt);
+  drawHair(ctx, look.hair, r, away, look.hair === "bun" ? INK : look.hair === "crown" ? "#3f9e4a" : look.belt);
   if (!away) drawFace(ctx, f, r, lookX, lookY);
 
   ctx.lineWidth = 5;
@@ -294,6 +385,16 @@ function drawBody(ctx, f, look, r, stepPhase) {
     ctx.fill();
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+export function drawSkinPreview(canvas, look) {
+  const ctx = canvas.getContext("2d");
+  const r = canvas.width * 0.34;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height * 0.93);
+  drawBody(ctx, { state: "idle", facing: Math.PI / 2, out: false }, look, r, 0);
   ctx.restore();
 }
 

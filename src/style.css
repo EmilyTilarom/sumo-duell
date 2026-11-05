@@ -156,6 +156,33 @@ button:active:enabled {
   cursor: not-allowed;
 }
 
+.levels button[aria-pressed="true"] {
+  background: var(--accent);
+}
+
+.levels canvas {
+  width: 58px;
+  height: 58px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tabs button {
+  min-width: 0;
+  padding: 5px 12px;
+  box-shadow: 0 2px 0 var(--ink);
+  font-size: 14px;
+}
+
+.tabs button[aria-pressed="true"] {
+  background: var(--accent);
+}
+
 .levels small {
   font-weight: 400;
   font-size: 11px;
