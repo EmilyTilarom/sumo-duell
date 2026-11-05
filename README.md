@@ -2,6 +2,8 @@
 
 Zwei schwerfällige Sumoringer kämpfen auf einer schwebenden Plattform. Wer den Rand übertritt, verliert die Runde. Wer zuerst zwei Runden gewinnt, gewinnt das Match. Nach 60 Sekunden schrumpft die Plattform, damit jede Runde endet.
 
+Direkt im Browser spielen: <https://emilytilarom.github.io/sumo-duell/>
+
 ## Start
 
 ```bash
