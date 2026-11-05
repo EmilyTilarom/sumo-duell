@@ -5,26 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>sumoDuell</title>
     <link rel="icon" href="data:," />
-    <style>
-      html,
-      body {
-        height: 100%;
-        margin: 0;
-      }
-      body {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #1c1a18;
-      }
-      canvas {
-        max-width: 100%;
-        max-height: 100%;
-      }
-    </style>
+    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <canvas id="game" width="800" height="800"></canvas>
+    <div id="stage">
+      <canvas id="game"></canvas>
+      <div id="overlay" hidden></div>
+    </div>
+    <p id="help"></p>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
