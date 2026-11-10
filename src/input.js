@@ -13,6 +13,18 @@ function keyOf(event) {
   return SYMBOLS[event.key] ?? event.code;
 }
 
+// Tastatur und Touch steuern gemeinsam denselben Ringer.
+export function combineInputs(a, b) {
+  const useB = a.x === 0 && a.y === 0;
+  return {
+    x: useB ? b.x : a.x,
+    y: useB ? b.y : a.y,
+    charge: a.charge || b.charge,
+    brace: a.brace || b.brace,
+    dodge: a.dodge || b.dodge,
+  };
+}
+
 export function createKeyboard() {
   const pressed = new Set();
   const keyboard = {

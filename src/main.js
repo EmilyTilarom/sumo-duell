@@ -14,8 +14,9 @@ import {
   winReward,
 } from "./game/skins.js";
 import { STEPS_PER_SECOND, createWorld, stepWorld } from "./game/world.js";
-import { createKeyboard } from "./input.js";
+import { combineInputs, createKeyboard } from "./input.js";
 import { createRenderer } from "./render.js";
+import { createTouchControls } from "./touch.js";
 import { hideOverlay, setHelp, showCampaign, showDialog, showMenu, showSkins } from "./ui.js";
 
 const STEP_MS = 1000 / STEPS_PER_SECOND;
@@ -27,6 +28,8 @@ const storage = window.localStorage;
 const renderer = createRenderer(document.getElementById("game"));
 const keyboard = createKeyboard();
 const audio = createAudio();
+const touch = createTouchControls(document.getElementById("touch"), { onPause: () => togglePause() });
+const playerOne = () => combineInputs(keyboard.read(0), touch.read());
 audio.muted = storage.getItem(MUTE_KEY) === "1";
 
 let progress = loadProgress(storage);
@@ -37,9 +40,22 @@ let paused = false;
 let lastTime = performance.now();
 let accumulator = 0;
 
+function setPlaying(playing) {
+  keyboard.active = playing;
+  touch.setVisible(playing);
+}
+
+// Auf Touch-Geräten im Vollbild und quer spielen, soweit der Browser das erlaubt.
+function goLandscape() {
+  if (!touch.enabled) return;
+  const lock = () => screen.orientation?.lock?.("landscape").catch(() => {});
+  if (document.fullscreenElement || !document.documentElement.requestFullscreen) lock();
+  else document.documentElement.requestFullscreen().then(lock, () => {});
+}
+
 function openMenu() {
   session = null;
-  keyboard.active = false;
+  setPlaying(false);
   setHelp(null);
   showMenu({
     muted: audio.muted,
@@ -63,7 +79,7 @@ function openMenu() {
 
 function openCampaign() {
   session = null;
-  keyboard.active = false;
+  setPlaying(false);
   setHelp(null);
   showCampaign({ progress, onLevel: startLevel, onBack: openMenu });
 }
@@ -103,10 +119,11 @@ function openSkins() {
 function beginSession(next) {
   session = next;
   paused = false;
-  keyboard.active = true;
+  setPlaying(true);
   hideOverlay();
   setHelp(next.mode);
   document.activeElement?.blur();
+  goLandscape();
 }
 
 function startVersus() {
@@ -114,7 +131,7 @@ function startVersus() {
     mode: "versus",
     world: createWorld(),
     labels: { names: ["Spieler 1", "Spieler 2"], looks: [equippedLook(shop, progress, 0), equippedLook(shop, progress, 1)] },
-    controllers: [() => keyboard.read(0), () => keyboard.read(1)],
+    controllers: [playerOne, () => keyboard.read(1)],
   });
 }
 
@@ -126,13 +143,13 @@ function startLevel(level) {
     level,
     world: createWorld({ masses: [1, entry.mass] }),
     labels: { names: ["Du", entry.name], looks: [equippedLook(shop, progress, 0), entry] },
-    controllers: [() => keyboard.read(0), (world) => thinkAi(ai, world, 1)],
+    controllers: [playerOne, (world) => thinkAi(ai, world, 1)],
   });
 }
 
 function finishMatch() {
   const { mode, level, world, labels } = session;
-  keyboard.active = false;
+  setPlaying(false);
   const winner = world.matchWinner;
   const score = `${world.scores[0]} : ${world.scores[1]}`;
 
@@ -170,7 +187,7 @@ function finishMatch() {
 
 function pause() {
   paused = true;
-  keyboard.active = false;
+  setPlaying(false);
   showDialog("Pause", "Das Match wartet auf dich.", [
     ["resume", "Weiter", resume],
     ["quit", "Match beenden", session.mode === "campaign" ? openCampaign : openMenu],
@@ -179,9 +196,15 @@ function pause() {
 
 function resume() {
   paused = false;
-  keyboard.active = true;
+  setPlaying(true);
   hideOverlay();
   document.activeElement?.blur();
+}
+
+function togglePause() {
+  if (!session || session.world.phase === "matchEnd") return;
+  if (paused) resume();
+  else pause();
 }
 
 function advance() {
@@ -208,9 +231,7 @@ function frame(now) {
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.code !== "Escape" || !session || session.world.phase === "matchEnd") return;
-  if (paused) resume();
-  else pause();
+  if (event.code === "Escape") togglePause();
 });
 
 if (import.meta.env.DEV) {
