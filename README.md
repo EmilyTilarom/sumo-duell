@@ -15,6 +15,7 @@ npm run dev
 
 - **Kampagne:** 10 Level gegen 10 verschiedene KI-Sumos. Ein Sieg schaltet das nächste Level frei, der Fortschritt bleibt im Browser gespeichert.
 - **Zwei Spieler:** beide an einer Tastatur.
+- **Mehr Ringer:** 3 oder 4 Ringer, wahlweise *Jeder gegen jeden* (wer zuletzt steht, gewinnt die Runde) oder *Einer gegen Team* (Spieler 1 allein gegen alle anderen, die zusammenhalten). Ein oder zwei Menschen spielen an der Tastatur, freie Plätze übernimmt die KI.
 
 ## Skins
 
@@ -28,6 +29,8 @@ Siege bringen Münzen, schwerere Level mehr und der erste Sieg über ein Level d
 | **Spieler 2** | Pfeiltasten | `,` | `.` | `-` |
 
 In der Kampagne spielst du als Spieler 1. `Esc` pausiert das Match.
+
+Auf Handy und Tablet steuerst du Spieler 1 mit einem Joystick links und drei Knöpfen rechts: Stoß (halten zum Aufladen), Stemmen und Ausweichen. Gespielt wird im Querformat.
 
 ## Aktionen
 

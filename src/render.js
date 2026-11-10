@@ -562,9 +562,14 @@ export function createRenderer(canvas) {
     }
   }
 
-  function drawPanel(side, name, f, wins) {
-    const left = side === 0;
+  // Ringer 1 und 3 links, 2 und 4 rechts, jeweils untereinander.
+  function drawPanel(index, name, f, wins) {
+    const left = index % 2 === 0;
+    const top = Math.floor(index / 2) * 68;
     const x = left ? 20 : WIDTH - 300;
+    ctx.save();
+    ctx.translate(0, top);
+    ctx.globalAlpha = f.out ? 0.5 : 1;
     ctx.fillStyle = "rgba(29,21,48,0.72)";
     ctx.strokeStyle = INK;
     ctx.lineWidth = 3;
@@ -597,6 +602,7 @@ export function createRenderer(canvas) {
       ctx.fill();
       ctx.stroke();
     }
+    ctx.restore();
   }
 
   function outlinedText(text, x, y, size, color = "#f4b63f") {
@@ -629,7 +635,7 @@ export function createRenderer(canvas) {
         outlinedText("Die Runde wird wiederholt", WIDTH / 2, 320, 24, "#fff4dc");
       } else {
         outlinedText("Ring-out!", WIDTH / 2, 270, 66);
-        outlinedText(`Runde für ${labels.names[world.roundWinner]}`, WIDTH / 2, 320, 26, "#fff4dc");
+        outlinedText(`Runde für ${labels.teamNames[world.roundWinner]}`, WIDTH / 2, 320, 26, "#fff4dc");
       }
     }
   }
@@ -652,7 +658,7 @@ export function createRenderer(canvas) {
     }
 
     const order = world.fighters.map((f, i) => ({ f, i })).sort((a, b) => a.f.y - b.f.y);
-    const tag = (i) => (labels.names[i] === "Du" ? "Du" : null);
+    const tag = (i) => labels.tags?.[i] ?? null;
     for (const { f, i } of order) if (f.out && f.y < 0) drawFighter(f, labels.looks[i], null, bob, now);
     drawPlatform(ctx, world.ring.radius, bob);
     drawTrails();
@@ -673,7 +679,7 @@ export function createRenderer(canvas) {
     ctx.globalAlpha = 1;
     ctx.restore();
 
-    world.fighters.forEach((f, i) => drawPanel(i, labels.names[i], f, world.scores[i]));
+    world.fighters.forEach((f, i) => drawPanel(i, labels.names[i], f, world.scores[f.team]));
     drawClock(world);
     drawBanner(world, labels);
   }

@@ -241,8 +241,15 @@ function headOn(a, b, events) {
 }
 
 // Gibt true zurück, wenn ein Ausweichen den Stoß ins Leere laufen ließ.
-export function resolveContact(a, b, events) {
+// Teamkameraden rempeln sich nur an, ihre Stöße werfen sich nicht gegenseitig weg.
+export function resolveContact(a, b, events, friendly = false) {
   if (!isOverlapping(a, b)) return false;
+
+  if (friendly) {
+    separate(a, b, effectiveMass(a), effectiveMass(b));
+    bounce(a, b, effectiveMass(a), effectiveMass(b));
+    return false;
+  }
 
   for (const [rusher, other] of [[a, b], [b, a]]) {
     if (rusher.state === "rushing" && other.state === "dodging") {

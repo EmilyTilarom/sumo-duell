@@ -12,16 +12,21 @@ export function resetRound(world) {
   world.ring.radius = RING_RADIUS;
   world.roundStep = 0;
   world.roundWinner = null;
-  world.noContact = 0;
   world.phase = "countdown";
   world.phaseTimer = COUNTDOWN_STEPS;
+  world.noContact = {};
+  const count = world.fighters.length;
   world.fighters.forEach((f, i) => {
+    // Gleichmäßig im Kreis verteilt, bei zwei Ringern links und rechts.
+    const angle = Math.PI + (i * 2 * Math.PI) / count;
+    const x = Math.round(Math.cos(angle) * SPAWN_X * 1e6) / 1e6;
+    const y = Math.round(Math.sin(angle) * SPAWN_X * 1e6) / 1e6 || 0;
     Object.assign(f, {
-      x: i === 0 ? -SPAWN_X : SPAWN_X,
-      y: 0,
+      x,
+      y,
       vx: 0,
       vy: 0,
-      facing: i === 0 ? 0 : Math.PI,
+      facing: Math.atan2(-y || 0, -x),
       state: "idle",
       timer: 0,
       charge: 0,
@@ -49,15 +54,19 @@ function checkRingOut(world) {
   }
 }
 
+export function standingTeams(world) {
+  return new Set(world.fighters.filter((f) => !f.out).map((f) => f.team));
+}
+
 function finishRound(world) {
-  const [first, second] = world.fighters;
+  const standing = [...standingTeams(world)];
   world.phase = "roundEnd";
   world.phaseTimer = ROUND_END_STEPS;
-  if (first.out && second.out) {
+  if (standing.length === 0) {
     world.roundWinner = "draw";
     world.draws += 1;
   } else {
-    const winner = first.out ? 1 : 0;
+    const winner = standing[0];
     world.roundWinner = winner;
     world.scores[winner] += 1;
     if (world.scores[winner] >= WINS_NEEDED) world.matchWinner = winner;
@@ -80,7 +89,8 @@ export function advanceRules(world) {
       world.roundStep += 1;
       shrinkRing(world);
       checkRingOut(world);
-      if (world.fighters.some((f) => f.out)) {
+      // Die Runde endet, sobald höchstens ein Team auf der Plattform steht.
+      if (standingTeams(world).size <= 1) {
         world.phase = "ringout";
         world.phaseTimer = DRAW_WINDOW;
       }

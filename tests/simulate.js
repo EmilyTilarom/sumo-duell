@@ -45,8 +45,8 @@ export function aiController(profile, seed) {
   return (world, index) => thinkAi(ai, world, index);
 }
 
-export function playMatch(controllers, masses, onStep) {
-  const world = createWorld({ masses });
+export function playMatch(controllers, masses, onStep, teams) {
+  const world = createWorld({ masses, teams });
   while (world.phase !== "matchEnd" && world.step < MAX_MATCH_STEPS) {
     const inputs = controllers.map((control, i) => control(world, i));
     stepWorld(world, inputs);

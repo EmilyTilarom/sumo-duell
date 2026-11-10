@@ -29,18 +29,18 @@ export function hideOverlay() {
   overlay.innerHTML = "";
 }
 
-export function setHelp(mode) {
-  help.innerHTML = mode === "versus" ? TWO_PLAYER_HELP : mode === "campaign" ? ONE_PLAYER_HELP : "";
+export function setHelp(humans) {
+  help.innerHTML = humans === 2 ? TWO_PLAYER_HELP : humans === 1 ? ONE_PLAYER_HELP : "";
 }
 
-export function showMenu({ muted, coins, onCampaign, onVersus, onSkins, onSound }) {
+export function showMenu({ muted, coins, onCampaign, onVersus, onGroup, onSkins, onSound }) {
   const sound = muted ? "Sound: aus" : "Sound: an";
   show(
     `<h1>sumoDuell</h1>
      <p>Stoß den anderen von der Plattform. Wer Schwung hat, ist stark, kommt aber schwer zum Stehen.</p>
-     ${buttons([["campaign", "Kampagne"], ["versus", "Zwei Spieler"], ["skins", "Skins"], ["sound", sound]])}
+     ${buttons([["campaign", "Kampagne"], ["versus", "Zwei Spieler"], ["group", "Mehr Ringer"], ["skins", "Skins"], ["sound", sound]])}
      <p>Münzen: ${coins}</p>`,
-    { campaign: onCampaign, versus: onVersus, skins: onSkins, sound: onSound },
+    { campaign: onCampaign, versus: onVersus, group: onGroup, skins: onSkins, sound: onSound },
   );
 }
 
@@ -95,6 +95,35 @@ export function showSkins(view) {
   for (const canvas of overlay.querySelectorAll("canvas[data-skin]")) {
     drawSkinPreview(canvas, SKINS.find((skin) => skin.id === canvas.dataset.skin).look);
   }
+}
+
+const GROUP_OPTIONS = {
+  mode: [["ffa", "Jeder gegen jeden"], ["team", "Einer gegen Team"]],
+  count: [[3, "3 Ringer"], [4, "4 Ringer"]],
+  humans: [[1, "1 Mensch"], [2, "2 Menschen"]],
+  strength: [["easy", "KI leicht"], ["medium", "KI mittel"], ["hard", "KI schwer"]],
+};
+
+export function showGroupSetup({ setup, onChange, onStart, onBack }) {
+  const rows = Object.entries(GROUP_OPTIONS).map(
+    ([key, options]) =>
+      `<div class="tabs">${options.map(([value, label]) => tab(key, value, label, setup[key] === value)).join("")}</div>`,
+  );
+  const solo = setup.mode === "team" ? "Spieler 1 kämpft allein gegen alle anderen, die zusammenhalten." : "Wer zuletzt auf der Plattform steht, gewinnt die Runde.";
+  show(
+    `<h2>Mehr Ringer</h2>
+     ${rows.join("")}
+     <p>${solo} Freie Plätze übernimmt die KI.</p>
+     ${buttons([["start", "Los geht's"], ["back", "Zurück"]])}`,
+    {
+      mode: (value) => onChange("mode", value),
+      count: (value) => onChange("count", Number(value)),
+      humans: (value) => onChange("humans", Number(value)),
+      strength: (value) => onChange("strength", value),
+      start: onStart,
+      back: onBack,
+    },
+  );
 }
 
 export function showDialog(title, text, entries) {

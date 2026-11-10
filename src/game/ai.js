@@ -16,6 +16,7 @@ const CLOSE_RANGE = 70;
 const CIRCLE_FROM = 180;
 const AIM_TOLERANCE = 0.22;
 const RUSH_LEAD_STEPS = 18;
+const MATE_SPACING = 160;
 
 export function createAi(profile, seed) {
   return { profile, rng: createRng(seed), wait: 0, input: NEUTRAL_INPUT, chargeGoal: 0 };
@@ -90,7 +91,19 @@ function aimAt(me, foe) {
   return { aim: unit(x, y), error: Math.abs(Math.atan2(Math.sin(angle), Math.cos(angle))) };
 }
 
-function attack(ai, me, foe, world, dist) {
+// Steht ein Teamkamerad zwischen mir und dem Ziel, wäre der Stoß verschenkt.
+function laneBlocked(me, foe, mates) {
+  const dx = foe.x - me.x;
+  const dy = foe.y - me.y;
+  const length = Math.hypot(dx, dy) || 1;
+  return mates.some((mate) => {
+    const along = ((mate.x - me.x) * dx + (mate.y - me.y) * dy) / length;
+    const across = Math.abs((mate.x - me.x) * dy - (mate.y - me.y) * dx) / length;
+    return along > 0 && along < length && across < me.radius + mate.radius;
+  });
+}
+
+function attack(ai, me, foe, world, dist, mates) {
   const p = ai.profile;
   const { aim, error } = aimAt(me, foe);
 
@@ -98,7 +111,7 @@ function attack(ai, me, foe, world, dist) {
     if (dist > p.rushMax * 1.5 || safeCharge(me, world, me.charge, p) === 0) {
       return { ...NEUTRAL_INPUT, brace: true };
     }
-    const ready = me.charge >= ai.chargeGoal && error < AIM_TOLERANCE;
+    const ready = me.charge >= ai.chargeGoal && error < AIM_TOLERANCE && !laneBlocked(me, foe, mates);
     return { ...NEUTRAL_INPUT, x: aim.x, y: aim.y, charge: !ready };
   }
   if (me.stamina < RUSH_COST) return null;
@@ -111,42 +124,60 @@ function attack(ai, me, foe, world, dist) {
 
   const goal = exposed ? Math.min(p.chargeGoal, 0.25) : p.chargeGoal;
   const charge = safeCharge(me, world, goal, p);
-  if (charge === 0 || error > AIM_TOLERANCE * 2) return null;
+  if (charge === 0 || error > AIM_TOLERANCE * 2 || laneBlocked(me, foe, mates)) return null;
   ai.chargeGoal = charge;
   return { ...NEUTRAL_INPUT, x: aim.x, y: aim.y, charge: true };
 }
 
-function position(ai, me, world, toFoe, dist) {
+function position(ai, me, world, toFoe, dist, mates) {
   const p = ai.profile;
   const edgeShare = Math.hypot(me.x, me.y) / Math.max(world.ring.radius, 1);
   const home = unit(-me.x, -me.y);
   const circle = dist > CIRCLE_FROM ? p.circle : 0;
-  const x = toFoe.x + home.x * edgeShare * p.centering - toFoe.y * circle;
-  const y = toFoe.y + home.y * edgeShare * p.centering + toFoe.x * circle;
+  let x = toFoe.x + home.x * edgeShare * p.centering - toFoe.y * circle;
+  let y = toFoe.y + home.y * edgeShare * p.centering + toFoe.x * circle;
+  // Teamkameraden verteilen sich, statt sich gegenseitig im Weg zu stehen.
+  for (const mate of mates) {
+    const gap = Math.hypot(me.x - mate.x, me.y - mate.y);
+    if (gap > 0 && gap < MATE_SPACING) {
+      x += ((me.x - mate.x) / gap) * (1 - gap / MATE_SPACING);
+      y += ((me.y - mate.y) / gap) * (1 - gap / MATE_SPACING);
+    }
+  }
   const walk = unit(x, y);
   return { ...NEUTRAL_INPUT, x: walk.x, y: walk.y };
 }
 
+function nearest(me, others) {
+  return others.reduce((best, f) => (Math.hypot(f.x - me.x, f.y - me.y) < Math.hypot(best.x - me.x, best.y - me.y) ? f : best));
+}
+
 function decide(ai, world, index) {
   const me = world.fighters[index];
-  const foe = world.fighters[1 - index];
-  if (me.out || foe.out) return NEUTRAL_INPUT;
+  const foes = world.fighters.filter((f) => !f.out && f.team !== me.team);
+  if (me.out || foes.length === 0) return NEUTRAL_INPUT;
+  const mates = world.fighters.filter((f) => f !== me && !f.out && f.team === me.team);
 
   const rescue = saveYourself(me, world, ai.profile);
   if (rescue) return rescue;
 
+  // Zuerst gegen jeden absichern, der gerade angreift, dann den nächsten Gegner angehen.
+  for (const threat of foes) {
+    const toThreat = unit(threat.x - me.x, threat.y - me.y);
+    const defense = defend(ai, me, threat, Math.hypot(threat.x - me.x, threat.y - me.y), toThreat);
+    if (defense) return defense;
+  }
+
+  const foe = nearest(me, foes);
   const toFoe = unit(foe.x - me.x, foe.y - me.y);
   const dist = Math.hypot(foe.x - me.x, foe.y - me.y);
-
-  const defense = defend(ai, me, foe, dist, toFoe);
-  if (defense) return defense;
 
   if (ai.rng() < ai.profile.errorRate) {
     const angle = ai.rng() * Math.PI * 2;
     return { ...NEUTRAL_INPUT, x: Math.cos(angle), y: Math.sin(angle) };
   }
 
-  return attack(ai, me, foe, world, dist) ?? position(ai, me, world, toFoe, dist);
+  return attack(ai, me, foe, world, dist, mates) ?? position(ai, me, world, toFoe, dist, mates);
 }
 
 // Liefert dieselbe Eingabe wie eine Tastatur. Entschieden wird nur alle paar Schritte (Reaktionszeit).

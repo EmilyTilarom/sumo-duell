@@ -17,7 +17,7 @@ import { STEPS_PER_SECOND, createWorld, stepWorld } from "./game/world.js";
 import { combineInputs, createKeyboard } from "./input.js";
 import { createRenderer } from "./render.js";
 import { createTouchControls } from "./touch.js";
-import { hideOverlay, setHelp, showCampaign, showDialog, showMenu, showSkins } from "./ui.js";
+import { hideOverlay, setHelp, showCampaign, showDialog, showGroupSetup, showMenu, showSkins } from "./ui.js";
 
 const STEP_MS = 1000 / STEPS_PER_SECOND;
 // Nach einem Tab-Wechsel nicht alle verpassten Schritte nachholen.
@@ -35,6 +35,9 @@ audio.muted = storage.getItem(MUTE_KEY) === "1";
 let progress = loadProgress(storage);
 let shop = loadShop(storage);
 const skinView = { player: 0, collection: "fruit" };
+const groupSetup = { mode: "ffa", count: 4, humans: 1, strength: "medium" };
+// Stärke der KI im Modus mit mehr Ringern, gemessen an den Kampagnen-Leveln.
+const GROUP_STRENGTH = { easy: 2, medium: 5, hard: 8 };
 let session = null;
 let paused = false;
 let lastTime = performance.now();
@@ -67,6 +70,10 @@ function openMenu() {
     onVersus: () => {
       audio.unlock();
       startVersus();
+    },
+    onGroup: () => {
+      audio.unlock();
+      openGroupSetup();
     },
     onSkins: openSkins,
     onSound: () => {
@@ -116,21 +123,67 @@ function openSkins() {
   });
 }
 
+function openGroupSetup() {
+  showGroupSetup({
+    setup: groupSetup,
+    onChange: (key, value) => {
+      groupSetup[key] = value;
+      openGroupSetup();
+    },
+    onStart: startGroup,
+    onBack: openMenu,
+  });
+}
+
+function startGroup() {
+  const { mode, count, humans, strength } = groupSetup;
+  const teams = mode === "team" ? [0, ...Array(count - 1).fill(1)] : [...Array(count).keys()];
+  const level = GROUP_STRENGTH[strength];
+  const names = [];
+  const looks = [];
+  const controllers = [];
+  for (let i = 0; i < count; i += 1) {
+    if (i < humans) {
+      names.push(`Spieler ${i + 1}`);
+      looks.push(equippedLook(shop, progress, i));
+      controllers.push(i === 0 ? playerOne : () => keyboard.read(1));
+      continue;
+    }
+    // Jeder KI-Platz trägt das Aussehen eines anderen Kampagnen-Gegners, gespielt wird mit der gewählten Stärke.
+    const opponent = LEVELS[(level + i * 3) % LEVELS.length];
+    const ai = createAi(LEVELS[level - 1].ai, (Date.now() + i * 7919) >>> 0);
+    names.push(opponent.name);
+    looks.push(opponent);
+    controllers.push((world) => thinkAi(ai, world, i));
+  }
+  const teamNames = mode === "team" ? [names[0], "Team"] : names;
+  const tags = names.map((_, i) => (i < humans ? (humans === 1 ? "Du" : `P${i + 1}`) : null));
+  beginSession({
+    mode: "group",
+    humans,
+    world: createWorld({ masses: Array(count).fill(1), teams }),
+    labels: { names, teamNames, looks, tags },
+    controllers,
+  });
+}
+
 function beginSession(next) {
   session = next;
   paused = false;
   setPlaying(true);
   hideOverlay();
-  setHelp(next.mode);
+  setHelp(next.humans);
   document.activeElement?.blur();
   goLandscape();
 }
 
 function startVersus() {
+  const names = ["Spieler 1", "Spieler 2"];
   beginSession({
     mode: "versus",
+    humans: 2,
     world: createWorld(),
-    labels: { names: ["Spieler 1", "Spieler 2"], looks: [equippedLook(shop, progress, 0), equippedLook(shop, progress, 1)] },
+    labels: { names, teamNames: names, looks: [equippedLook(shop, progress, 0), equippedLook(shop, progress, 1)] },
     controllers: [playerOne, () => keyboard.read(1)],
   });
 }
@@ -138,11 +191,13 @@ function startVersus() {
 function startLevel(level) {
   const entry = LEVELS[level - 1];
   const ai = createAi(entry.ai, Date.now() >>> 0);
+  const names = ["Du", entry.name];
   beginSession({
     mode: "campaign",
+    humans: 1,
     level,
     world: createWorld({ masses: [1, entry.mass] }),
-    labels: { names: ["Du", entry.name], looks: [equippedLook(shop, progress, 0), entry] },
+    labels: { names, teamNames: names, looks: [equippedLook(shop, progress, 0), entry], tags: ["Du", null] },
     controllers: [playerOne, (world) => thinkAi(ai, world, 1)],
   });
 }
@@ -151,11 +206,11 @@ function finishMatch() {
   const { mode, level, world, labels } = session;
   setPlaying(false);
   const winner = world.matchWinner;
-  const score = `${world.scores[0]} : ${world.scores[1]}`;
+  const score = world.scores.join(" : ");
 
-  if (mode === "versus") {
-    showDialog(`${labels.names[winner]} gewinnt`, `Endstand ${score} · ${reward(VERSUS_REWARD)}`, [
-      ["again", "Noch ein Match", startVersus],
+  if (mode !== "campaign") {
+    showDialog(`${labels.teamNames[winner]} gewinnt`, `Endstand ${score} · ${reward(VERSUS_REWARD)}`, [
+      ["again", "Noch ein Match", mode === "versus" ? startVersus : startGroup],
       ["menu", "Hauptmenü", openMenu],
     ]);
     return;
