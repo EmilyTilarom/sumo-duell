@@ -1,6 +1,6 @@
 // Verbindung über PeerJS (WebRTC). Der öffentliche PeerJS-Server vermittelt nur, danach reden die Browser direkt.
 import { Peer } from "peerjs";
-import { makeCode, peerIdFor } from "./protocol.js";
+import { isAcceptableConnection, makeCode, peerIdFor } from "./protocol.js";
 
 const JOIN_TIMEOUT_MS = 15000;
 const MAX_CODE_TRIES = 5;
@@ -58,7 +58,14 @@ export function openRoom({ onCode, onGuest, onError }) {
     const code = makeCode();
     peer = new Peer(peerIdFor(code));
     peer.on("open", () => onCode(code));
-    peer.on("connection", (connection) => connection.on("open", () => onGuest(wrap(connection))));
+    peer.on("connection", (connection) => {
+      // Sofort ablehnen, bevor die Verbindung Daten annimmt.
+      if (!isAcceptableConnection(connection)) {
+        connection.close();
+        return;
+      }
+      connection.on("open", () => onGuest(wrap(connection)));
+    });
     // Bricht nur die Leitung zum Vermittlungsserver ab, laufen bestehende Verbindungen weiter.
     peer.on("disconnected", () => {
       if (!destroyed) peer.reconnect();

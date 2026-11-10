@@ -24,6 +24,13 @@ export function normalizeCode(text) {
   return code.length === CODE_LENGTH && [...code].every((c) => CODE_ALPHABET.includes(c)) ? code : null;
 }
 
+// PeerJS lässt den verbindenden Gast die Serialisierung wählen. "binary" setzt Teilstücke ohne Obergrenze
+// im Speicher zusammen, "raw" reicht Binärdaten ungeprüft durch. Der Host nimmt deshalb nur JSON an,
+// zuverlässig übertragen und ohne Zusatzdaten (metadata).
+export function isAcceptableConnection(connection) {
+  return connection?.serialization === "json" && connection.reliable === true && connection.metadata == null;
+}
+
 export function peerIdFor(code) {
   return `sumoduell-${code.toLowerCase()}`;
 }
