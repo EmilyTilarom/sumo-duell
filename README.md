@@ -17,6 +17,16 @@ npm run dev
 - **Zwei Spieler:** beide an einer Tastatur.
 - **Mehr Ringer:** 3 oder 4 Ringer, wahlweise *Jeder gegen jeden* (wer zuletzt steht, gewinnt die Runde) oder *Einer gegen Team* (Spieler 1 allein gegen alle anderen, die zusammenhalten). Ein oder zwei Menschen spielen an der Tastatur, freie Plätze übernimmt die KI.
 
+## Online
+
+Unter **Online** erstellt einer einen Raum und schickt den fünfstelligen Code an Freunde. Bis zu drei weitere Spieler treten bei, der Host wählt Modus und Zahl der Ringer, freie Plätze übernimmt die KI. Der Host berechnet das Spiel, die anderen schicken nur ihre Eingaben. Verliert ein Gast die Verbindung, spielt die KI für ihn weiter.
+
+Gut zu wissen:
+
+- Die Verbindung vermittelt [PeerJS](https://peerjs.com/) über seinen öffentlichen Server. Das ist ein fremder Dienst, auf den dieses Projekt keinen Einfluss hat.
+- Danach verbinden sich die Browser direkt per WebRTC. Dabei sehen die Mitspieler gegenseitig ihre IP-Adresse.
+- Bei strengen Firewalls oder manchen Mobilfunknetzen kann die Verbindung scheitern, weil es keinen eigenen Weiterleitungsserver gibt.
+
 ## Skins
 
 Siege bringen Münzen, schwerere Level mehr und der erste Sieg über ein Level doppelt so viele. Im Menü **Skins** kauft und wählt jeder Spieler sein Aussehen: Früchte, Countryballs und Krypto-Münzen. Zwei besondere Skins gibt es nur über die Kampagne. Das Standard-Aussehen bleibt erhalten. Die Skins verändern nur das Aussehen, nicht die Spielwerte. Die Münzen sind reine Spielwährung, ohne echtes Geld.
@@ -61,6 +71,7 @@ src/
   render.js      Zeichnen auf dem Canvas
   audio.js       Klänge
   ui.js          Menüs
+  touch.js       Touch-Steuerung
   game/
     world.js     Spielzustand und Schritt
     physics.js   Bewegung, Reibung, Stöße
@@ -69,5 +80,6 @@ src/
     ai.js        KI-Gegner
     campaign.js  Level und Fortschritt
     skins.js     Skins, Münzen und Kaufen
+  net/           Online: Nachrichten, Host, Gast, PeerJS
 tests/           Tests und Kampfsimulation
 ```

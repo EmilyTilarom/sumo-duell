@@ -33,14 +33,14 @@ export function setHelp(humans) {
   help.innerHTML = humans === 2 ? TWO_PLAYER_HELP : humans === 1 ? ONE_PLAYER_HELP : "";
 }
 
-export function showMenu({ muted, coins, onCampaign, onVersus, onGroup, onSkins, onSound }) {
+export function showMenu({ muted, coins, onCampaign, onVersus, onGroup, onOnline, onSkins, onSound }) {
   const sound = muted ? "Sound: aus" : "Sound: an";
   show(
     `<h1>sumoDuell</h1>
      <p>Stoß den anderen von der Plattform. Wer Schwung hat, ist stark, kommt aber schwer zum Stehen.</p>
-     ${buttons([["campaign", "Kampagne"], ["versus", "Zwei Spieler"], ["group", "Mehr Ringer"], ["skins", "Skins"], ["sound", sound]])}
+     ${buttons([["campaign", "Kampagne"], ["versus", "Zwei Spieler"], ["group", "Mehr Ringer"], ["online", "Online"], ["skins", "Skins"], ["sound", sound]])}
      <p>Münzen: ${coins}</p>`,
-    { campaign: onCampaign, versus: onVersus, group: onGroup, skins: onSkins, sound: onSound },
+    { campaign: onCampaign, versus: onVersus, group: onGroup, online: onOnline, skins: onSkins, sound: onSound },
   );
 }
 
@@ -126,6 +126,58 @@ export function showGroupSetup({ setup, onChange, onStart, onBack }) {
   );
 }
 
+export function showOnlineMenu({ error, onHost, onJoin, onBack }) {
+  show(
+    `<h2>Online</h2>
+     <p>Erstelle einen Raum und schick den Code an Freunde, oder tritt mit einem Code bei.</p>
+     ${buttons([["host", "Raum erstellen"]])}
+     <div class="buttons join">
+       <input id="room-code" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Raumcode" />
+       <button data-action="join">Beitreten</button>
+     </div>
+     ${error ? `<p class="error">${error}</p>` : ""}
+     ${buttons([["back", "Zurück"]])}
+     <p class="small">Die Verbindung vermittelt der fremde Dienst PeerJS. Mitspieler sehen gegenseitig ihre IP-Adresse.</p>`,
+    { host: onHost, join: () => onJoin(overlay.querySelector("#room-code").value), back: onBack },
+  );
+  const field = overlay.querySelector("#room-code");
+  field.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") onJoin(field.value);
+  });
+}
+
+const SEAT_NAMES = { host: "Host", guest: "Gast" };
+
+export function showOnlineLobby({ code, isHost, mySeat, players, setup, onChange, onStart, onLeave }) {
+  const humans = players.length;
+  const seats = Array.from({ length: Math.max(setup.count, humans) }, (_, seat) => {
+    const player = players[seat];
+    if (!player) return `<li>Platz ${seat + 1}: KI</li>`;
+    const me = player.seat === mySeat ? " (du)" : "";
+    return `<li>Platz ${seat + 1}: ${SEAT_NAMES[player.kind]}${me}</li>`;
+  });
+  const options = isHost
+    ? [
+        `<div class="tabs">${GROUP_OPTIONS.mode.map(([value, label]) => tab("mode", value, label, setup.mode === value)).join("")}</div>`,
+        `<div class="tabs">${[2, 3, 4].map((n) => tab("count", n, `${n} Ringer`, setup.count === n)).join("")}</div>`,
+        `<div class="tabs">${GROUP_OPTIONS.strength.map(([value, label]) => tab("strength", value, label, setup.strength === value)).join("")}</div>`,
+      ].join("")
+    : `<p>${setup.mode === "team" ? "Einer gegen Team" : "Jeder gegen jeden"} · ${Math.max(setup.count, humans)} Ringer · Der Host startet das Match.</p>`;
+  show(
+    `<h2>Raum ${code}</h2>
+     <ul class="seats">${seats.join("")}</ul>
+     ${options}
+     ${buttons(isHost ? [["start", "Match starten"], ["leave", "Raum schließen"]] : [["leave", "Raum verlassen"]])}`,
+    {
+      mode: (value) => onChange({ mode: value }),
+      count: (value) => onChange({ count: Number(value) }),
+      strength: (value) => onChange({ strength: value }),
+      start: onStart,
+      leave: onLeave,
+    },
+  );
+}
+
 export function showDialog(title, text, entries) {
   const actions = Object.fromEntries(entries.map(([action, , run]) => [action, run]));
   show(`<h2>${title}</h2><p>${text}</p>${buttons(entries)}`, actions);
@@ -133,7 +185,7 @@ export function showDialog(title, text, entries) {
 
 // Pfeiltasten springen in Menüs von Knopf zu Knopf.
 window.addEventListener("keydown", (event) => {
-  if (overlay.hidden) return;
+  if (overlay.hidden || event.target.tagName === "INPUT") return;
   const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.code];
   if (!step) return;
   event.preventDefault();

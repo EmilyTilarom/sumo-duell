@@ -429,6 +429,7 @@ export function createRenderer(canvas) {
   paintBackdrop(backdropCtx);
 
   let shake = 0;
+  let notices = [];
   let particles = [];
   let popups = [];
   let trails = [];
@@ -640,6 +641,15 @@ export function createRenderer(canvas) {
     }
   }
 
+  function notify(text) {
+    notices.push({ text, until: performance.now() + 4500 });
+  }
+
+  function drawNotices(now) {
+    notices = notices.filter((notice) => notice.until > now);
+    notices.forEach((notice, i) => outlinedText(notice.text, WIDTH / 2, HEIGHT - 26 - i * 30, 20, "#fff4dc"));
+  }
+
   function draw(world, labels, now) {
     updateEffects(Math.min(now - lastDraw, 100));
     lastDraw = now;
@@ -682,8 +692,9 @@ export function createRenderer(canvas) {
     world.fighters.forEach((f, i) => drawPanel(i, labels.names[i], f, world.scores[f.team]));
     drawClock(world);
     drawBanner(world, labels);
+    drawNotices(now);
   }
 
-  return { draw, onEvent };
+  return { draw, onEvent, notify };
 }
 
