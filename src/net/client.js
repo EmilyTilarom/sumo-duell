@@ -10,6 +10,8 @@ const REASONS = {
   busy: "In diesem Raum läuft gerade ein Match.",
   version: "Der Host hat eine andere Spielversion. Bitte beide die Seite neu laden.",
   bye: "Der Host hat den Raum geschlossen.",
+  kicked: "Der Host hat dich aus dem Raum entfernt.",
+  flood: "Zu viele Nachrichten, die Verbindung wurde getrennt.",
 };
 
 function lerpAngle(a, b, t) {

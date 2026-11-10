@@ -40,6 +40,8 @@ const MAX_FRAME_MS = 250;
 // Ein Tab im Hintergrund bekommt selten Rechenzeit und holt online dann bis zu einer Sekunde nach.
 const MAX_HIDDEN_HOST_MS = 1000;
 const INPUT_EVERY_STEPS = 3;
+// Gäste melden sich auch in der Lobby regelmäßig, sonst hält der Host sie für weg.
+const HEARTBEAT_MS = 2000;
 const MUTE_KEY = "sumoDuell.muted";
 
 const storage = window.localStorage;
@@ -320,7 +322,12 @@ function frame(now) {
 // Ein Timer treibt die Schritte zusätzlich an. Gezählt wird nach vergangener Zeit, doppelte Aufrufe schaden nicht.
 setInterval(() => {
   if (room) pump(performance.now(), MAX_HIDDEN_HOST_MS);
+  if (room?.host && !room.host.match && room.host.checkTimeouts()) showHostLobby();
 }, 50);
+
+setInterval(() => {
+  room?.conn?.send({ t: "hb" });
+}, HEARTBEAT_MS);
 
 // ---------- Online ----------
 
@@ -420,6 +427,10 @@ function showHostLobby() {
       showHostLobby();
     },
     onStart: startHostMatch,
+    onKick: (seat) => {
+      host.kick(seat);
+      showHostLobby();
+    },
     onLeave: () => openOnline(),
   });
 }
@@ -455,7 +466,7 @@ function startHostMatch() {
 
 function joinAsGuest(text) {
   const code = normalizeCode(text);
-  if (!code) return openOnline("Der Code hat 5 Zeichen, zum Beispiel K7QXM.");
+  if (!code) return openOnline("Der Code hat 6 Zeichen, zum Beispiel K7QXM2.");
   leaveRoom();
   const current = { client: createClient({ now: () => performance.now() }), conn: null, peer: null };
   room = current;

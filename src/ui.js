@@ -132,7 +132,7 @@ export function showOnlineMenu({ error, onHost, onJoin, onBack }) {
      <p>Erstelle einen Raum und schick den Code an Freunde, oder tritt mit einem Code bei.</p>
      ${buttons([["host", "Raum erstellen"]])}
      <div class="buttons join">
-       <input id="room-code" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Raumcode" />
+       <input id="room-code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Raumcode" />
        <button data-action="join">Beitreten</button>
      </div>
      ${error ? `<p class="error">${error}</p>` : ""}
@@ -148,13 +148,14 @@ export function showOnlineMenu({ error, onHost, onJoin, onBack }) {
 
 const SEAT_NAMES = { host: "Host", guest: "Gast" };
 
-export function showOnlineLobby({ code, isHost, mySeat, players, setup, onChange, onStart, onLeave }) {
+export function showOnlineLobby({ code, isHost, mySeat, players, setup, onChange, onStart, onKick, onLeave }) {
   const humans = players.length;
   const seats = Array.from({ length: Math.max(setup.count, humans) }, (_, seat) => {
     const player = players[seat];
     if (!player) return `<li>Platz ${seat + 1}: KI</li>`;
     const me = player.seat === mySeat ? " (du)" : "";
-    return `<li>Platz ${seat + 1}: ${SEAT_NAMES[player.kind]}${me}</li>`;
+    const kick = isHost && player.kind === "guest" ? ` <button class="kick" data-action="kick" data-value="${player.seat}">Entfernen</button>` : "";
+    return `<li>Platz ${seat + 1}: ${SEAT_NAMES[player.kind]}${me}${kick}</li>`;
   });
   const options = isHost
     ? [
@@ -173,6 +174,7 @@ export function showOnlineLobby({ code, isHost, mySeat, players, setup, onChange
       count: (value) => onChange({ count: Number(value) }),
       strength: (value) => onChange({ strength: value }),
       start: onStart,
+      kick: (value) => onKick(Number(value)),
       leave: onLeave,
     },
   );

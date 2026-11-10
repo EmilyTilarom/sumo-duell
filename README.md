@@ -19,7 +19,7 @@ npm run dev
 
 ## Online
 
-Unter **Online** erstellt einer einen Raum und schickt den fünfstelligen Code an Freunde. Bis zu drei weitere Spieler treten bei, der Host wählt Modus und Zahl der Ringer, freie Plätze übernimmt die KI. Der Host berechnet das Spiel, die anderen schicken nur ihre Eingaben. Verliert ein Gast die Verbindung, spielt die KI für ihn weiter.
+Unter **Online** erstellt einer einen Raum und schickt den sechsstelligen Code an Freunde. Bis zu drei weitere Spieler treten bei, der Host wählt Modus und Zahl der Ringer, freie Plätze übernimmt die KI. Der Host berechnet das Spiel, die anderen schicken nur ihre Eingaben. Verliert ein Gast die Verbindung, spielt die KI für ihn weiter.
 
 Gut zu wissen:
 

@@ -8,6 +8,16 @@ import { MAX_PLAYERS, PROTOCOL_VERSION, STRENGTHS, decodeInput, decodeSetup, enc
 
 export const STATE_EVERY = 2;
 export const GUEST_TIMEOUT_MS = 8000;
+// Wer sich verbindet, muss sich schnell mit "hello" melden.
+export const HELLO_TIMEOUT_MS = 5000;
+// Eine Eingabe ist rund 60 Byte groß, alles deutlich Größere ist kein Spielzug.
+export const MAX_MESSAGE_BYTES = 512;
+// Ein Gast schickt etwa 20 Eingaben pro Sekunde. Erlaubt sind doppelt so viele wie 60 pro Sekunde,
+// kurze Schübe (etwa nach einem Hintergrund-Tab) fängt der Vorrat ab.
+export const MESSAGES_PER_SECOND = 120;
+export const MESSAGE_BURST = 240;
+// Erst wer über längere Zeit zu viel schickt, wird getrennt.
+export const FLOOD_LIMIT = 120;
 
 export function createHost({ code, hostSkin, now = () => Date.now(), seed = Date.now() }) {
   const guests = [];
@@ -42,8 +52,46 @@ export function createHost({ code, hostSkin, now = () => Date.now(), seed = Date
 
   function reject(guest, type) {
     send(guest, { t: type });
-    guests.splice(guests.indexOf(guest), 1);
+    const wasSeated = guest.seat !== null;
+    const index = guests.indexOf(guest);
+    if (index !== -1) guests.splice(index, 1);
     guest.conn.close();
+    if (wasSeated && !match) sendLobby();
+  }
+
+  // Token-Eimer: füllt sich mit MESSAGES_PER_SECOND auf. Ist er leer, wird die Nachricht verworfen und gezählt.
+  function withinRate(guest) {
+    const time = now();
+    guest.tokens = Math.min(MESSAGE_BURST, guest.tokens + ((time - guest.lastRefill) / 1000) * MESSAGES_PER_SECOND);
+    guest.lastRefill = time;
+    if (guest.tokens >= 1) {
+      guest.tokens -= 1;
+      return true;
+    }
+    guest.overflow += 1;
+    return false;
+  }
+
+  function tooLarge(msg) {
+    try {
+      return JSON.stringify(msg).length > MAX_MESSAGE_BYTES;
+    } catch {
+      return true;
+    }
+  }
+
+  // Trennt stumme Verbindungen, auch in der Lobby. Gibt true zurück, wenn jemand gegangen ist.
+  function checkTimeouts() {
+    let changed = false;
+    for (const guest of [...guests]) {
+      const limit = guest.seat === null ? HELLO_TIMEOUT_MS : GUEST_TIMEOUT_MS;
+      const since = now() - (guest.seat === null ? guest.connectedAt : guest.lastSeen);
+      if (since <= limit) continue;
+      guest.conn.close();
+      dropGuest(guest);
+      changed = true;
+    }
+    return changed;
   }
 
   function freeSeat() {
@@ -81,12 +129,25 @@ export function createHost({ code, hostSkin, now = () => Date.now(), seed = Date
     },
 
     connect(conn) {
-      guests.push({ conn, seat: null, input: NEUTRAL_INPUT, lastSeen: now(), skin: null });
+      const time = now();
+      guests.push({ conn, seat: null, input: NEUTRAL_INPUT, connectedAt: time, lastSeen: time, skin: null, tokens: MESSAGE_BURST, lastRefill: time, overflow: 0 });
     },
 
     receive(conn, msg) {
       const guest = guests.find((g) => g.conn === conn);
       if (!guest) return;
+      if (!withinRate(guest)) {
+        if (guest.overflow > FLOOD_LIMIT) {
+          if (guest.matchSeat !== undefined) {
+            guest.conn.close();
+            dropGuest(guest);
+          } else {
+            reject(guest, "flood");
+          }
+        }
+        return;
+      }
+      if (tooLarge(msg)) return;
       guest.lastSeen = now();
       if (guest.seat === null) {
         if (msg?.t !== "hello") return;
@@ -102,6 +163,16 @@ export function createHost({ code, hostSkin, now = () => Date.now(), seed = Date
       }
       const input = decodeInput(msg);
       if (input) guest.input = input;
+    },
+
+    checkTimeouts,
+
+    // Nur in der Lobby: Der Host entfernt einen Gast, der Gast erfährt warum.
+    kick(seat) {
+      const guest = guests.find((g) => g.seat === seat);
+      if (!guest || match) return false;
+      reject(guest, "kicked");
+      return true;
     },
 
     disconnect(conn) {
@@ -140,12 +211,7 @@ export function createHost({ code, hostSkin, now = () => Date.now(), seed = Date
     // Ein Spielschritt. Gibt die Ereignisse dieses Schritts für Ton und Effekte beim Host zurück.
     tick(localInput) {
       if (!match || match.world.phase === "matchEnd") return [];
-      for (const guest of [...guests]) {
-        if (now() - guest.lastSeen > GUEST_TIMEOUT_MS) {
-          guest.conn.close();
-          dropGuest(guest);
-        }
-      }
+      checkTimeouts();
       const { world, brains } = match;
       const inputs = match.seats.map((_, i) => {
         if (i === 0) return localInput;

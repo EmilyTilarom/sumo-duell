@@ -4,7 +4,7 @@ import { skinById } from "../game/skins.js";
 
 export const PROTOCOL_VERSION = 1;
 export const MAX_PLAYERS = 4;
-export const CODE_LENGTH = 5;
+export const CODE_LENGTH = 6;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const STATES = new Set(["idle", "charging", "rushing", "bracing", "dodging", "recovering", "staggered"]);
 const PHASES = new Set(["countdown", "fight", "ringout", "roundEnd", "matchEnd"]);
@@ -14,10 +14,9 @@ const EVENTS = new Set([
 export const MODES = ["ffa", "team"];
 export const STRENGTHS = { easy: 2, medium: 5, hard: 8 };
 
-export function makeCode(random = Math.random) {
-  let code = "";
-  for (let i = 0; i < CODE_LENGTH; i += 1) code += CODE_ALPHABET[Math.floor(random() * CODE_ALPHABET.length)];
-  return code;
+// Kryptografischer Zufall. Das Alphabet hat 32 Zeichen, 256 ist durch 32 teilbar: kein Zeichen kommt häufiger vor.
+export function makeCode(randomBytes = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n))) {
+  return [...randomBytes(CODE_LENGTH)].map((byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join("");
 }
 
 export function normalizeCode(text) {

@@ -3,7 +3,7 @@ import { NEUTRAL_INPUT } from "../src/game/actions.js";
 import { COUNTDOWN_STEPS } from "../src/game/rules.js";
 import { createWorld } from "../src/game/world.js";
 import { RENDER_DELAY_MS, createClient, interpolate } from "../src/net/client.js";
-import { GUEST_TIMEOUT_MS, createHost } from "../src/net/host.js";
+import { FLOOD_LIMIT, GUEST_TIMEOUT_MS, HELLO_TIMEOUT_MS, MAX_MESSAGE_BYTES, createHost } from "../src/net/host.js";
 import {
   PROTOCOL_VERSION,
   buildLabels,
@@ -36,7 +36,7 @@ function fakeConnection() {
 
 function setupHost() {
   let time = 0;
-  const host = createHost({ code: "ABCDE", hostSkin: "apple", now: () => time, seed: 1 });
+  const host = createHost({ code: "ABCDEF", hostSkin: "apple", now: () => time, seed: 1 });
   const join = (skin = "btc") => {
     const conn = fakeConnection();
     host.connect(conn);
@@ -47,13 +47,19 @@ function setupHost() {
 }
 
 describe("Raumcode", () => {
-  it("hat 5 gut lesbare Zeichen", () => {
+  it("hat 6 gut lesbare Zeichen", () => {
     const code = makeCode();
-    expect(code).toMatch(/^[A-HJ-NP-Z2-9]{5}$/);
+    expect(code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
     expect(normalizeCode(` ${code.toLowerCase()} `)).toBe(code);
   });
 
-  it.each(["", "ABCD", "ABCDEF", "AB0DE", "ABCD!"])("lehnt %s ab", (text) => {
+  it("kommt aus kryptografischem Zufall, jedes Byte bestimmt ein Zeichen", () => {
+    expect(makeCode((n) => new Uint8Array(n).fill(0))).toBe("AAAAAA");
+    expect(makeCode(() => new Uint8Array([31, 32, 63, 255, 1, 33]))).toBe("9A99BB");
+    expect(new Set(Array.from({ length: 50 }, () => makeCode())).size).toBe(50);
+  });
+
+  it.each(["", "ABCDE", "ABCDEFG", "AB0DEF", "ABCDE!"])("lehnt %s ab", (text) => {
     expect(normalizeCode(text)).toBeNull();
   });
 });
@@ -270,5 +276,103 @@ describe("Gast", () => {
     const shown = client.view(1033 + RENDER_DELAY_MS - 16).fighters[0].x;
     expect(shown).toBeGreaterThan(-150);
     expect(shown).toBeLessThan(100);
+  });
+});
+
+describe("Schutz des Hosts", () => {
+  it("trennt eine Verbindung ohne hello nach kurzer Zeit, auch in der Lobby", () => {
+    const { host, advanceTime } = setupHost();
+    const silent = fakeConnection();
+    host.connect(silent);
+    advanceTime(HELLO_TIMEOUT_MS - 1);
+    expect(host.checkTimeouts()).toBe(false);
+    advanceTime(2);
+    expect(host.checkTimeouts()).toBe(true);
+    expect(silent.closed).toBe(true);
+    const late = fakeConnection();
+    host.connect(late);
+    host.receive(silent, { t: "hello", v: PROTOCOL_VERSION });
+    expect(silent.sent).toEqual([]);
+  });
+
+  it("trennt einen stummen Gast in der Lobby, die anderen sehen es", () => {
+    const { host, join, advanceTime } = setupHost();
+    const silent = join();
+    const active = join();
+    advanceTime(GUEST_TIMEOUT_MS / 2);
+    host.receive(active, { t: "hb" });
+    advanceTime(GUEST_TIMEOUT_MS / 2 + 1);
+    expect(host.checkTimeouts()).toBe(true);
+    expect(silent.closed).toBe(true);
+    expect(active.closed).toBe(false);
+    expect(active.last("lobby").players).toHaveLength(2);
+  });
+
+  it("verwirft zu große Nachrichten", () => {
+    const { host, join } = setupHost();
+    const guest = join();
+    host.start();
+    host.receive(guest, { t: "in", x: 1, y: 0, junk: "x".repeat(MAX_MESSAGE_BYTES) });
+    expect(host.match.world.fighters).toHaveLength(4);
+    for (let i = 0; i < 200; i += 1) host.tick(NEUTRAL_INPUT);
+    expect(host.match.world.fighters[1].vx).toBe(0);
+  });
+
+  it("normales Spielen mit 20 Eingaben pro Sekunde löst nie eine Trennung aus, auch nicht in Schüben", () => {
+    const { host, join, advanceTime } = setupHost();
+    const guest = join();
+    host.start();
+    for (let second = 0; second < 30; second += 1) {
+      const burst = second % 10 === 9 ? 60 : 20;
+      for (let i = 0; i < burst; i += 1) host.receive(guest, encodeInput(NEUTRAL_INPUT));
+      advanceTime(1000);
+      host.tick(NEUTRAL_INPUT);
+    }
+    expect(guest.closed).toBe(false);
+    expect(host.match.brains.has(1)).toBe(false);
+  });
+
+  it("wer dauerhaft viel zu viel schickt, wird getrennt", () => {
+    const { host, join, advanceTime } = setupHost();
+    const guest = join();
+    host.start();
+    for (let second = 0; second < 5 && !guest.closed; second += 1) {
+      for (let i = 0; i < 1000; i += 1) host.receive(guest, encodeInput(NEUTRAL_INPUT));
+      advanceTime(1000);
+    }
+    expect(guest.closed).toBe(true);
+    expect(host.match.brains.has(1)).toBe(true);
+  });
+
+  it("in der Lobby bekommt ein Flutender eine Meldung", () => {
+    const { host, join } = setupHost();
+    const guest = join();
+    for (let i = 0; i < 240 + FLOOD_LIMIT + 2; i += 1) host.receive(guest, { t: "hb" });
+    expect(guest.last("flood")).toBeTruthy();
+    expect(guest.closed).toBe(true);
+  });
+});
+
+describe("Spieler entfernen", () => {
+  it("der Host entfernt einen Gast, der Gast erfährt es, die anderen sehen die neue Lobby", () => {
+    const { host, join } = setupHost();
+    const removed = join();
+    const stays = join();
+    expect(host.kick(1)).toBe(true);
+    expect(removed.last("kicked")).toBeTruthy();
+    expect(removed.closed).toBe(true);
+    expect(stays.last("lobby").players.map((p) => p.seat)).toEqual([0, 2]);
+    const client = createClient();
+    for (const msg of removed.sent) client.receive(msg);
+    expect(client.closedReason).toContain("entfernt");
+  });
+
+  it("während eines Matches oder für unbekannte Plätze passiert nichts", () => {
+    const { host, join } = setupHost();
+    const guest = join();
+    expect(host.kick(3)).toBe(false);
+    host.start();
+    expect(host.kick(1)).toBe(false);
+    expect(guest.closed).toBe(false);
   });
 });

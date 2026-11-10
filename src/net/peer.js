@@ -42,7 +42,8 @@ function wrap(connection) {
     onMessage: (handler) => messageHandlers.push(handler),
     onClose: (handler) => closeHandlers.push(handler),
     close() {
-      connection.close();
+      // flush: eine eben verschickte Abschiedsnachricht (etwa "kicked") kommt noch an.
+      connection.close({ flush: true });
       finish();
     },
   };
